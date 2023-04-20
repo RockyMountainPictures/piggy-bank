@@ -1,22 +1,7 @@
-/*  
-
-  Main Code - IAT 267 Final Project
-  Date: 31-03-2023
-  By: Max Nielsen
-
-  Pseudocode:
-  - Gather any constant color data above 1000 (if more than 10 polls, then cut the stream)
-  - Store values in large array
-  - Check for which bill was inserted
-  - Send bill value over serial to other arduino
-  - Other arduino listens for this arduino's message
-  - Adds the bill value to the toal amount   
-  
-*/
-
 #include "SPI.h"
 #include "Adafruit_GFX.h"
 #include "Adafruit_ILI9341.h"
+
 #include <Servo.h>
 
 
@@ -56,12 +41,10 @@ int sensPins[] = {A4, A3, A2, A1, A0};  // 0.05 to $2
 int ledPins[] = {8};
 float coinSlots[numCoins][5];  // 0 = raw value of photocell, 1 = brightness on switch, 2 = timer, 3 = value of coin, 4 = ready to accept another coin
 int interval = 500;  // In ms
-int audio = 0;
 
 // Servo Variables
 int servoPin = 9;
 int servoPos = 0;
-int prevServoPos = 0;
 Servo servo; 
 
 void setup() {
@@ -81,11 +64,10 @@ void setup() {
   coinSlots[3][3] = 1;
   coinSlots[4][3] = 2;
   
-  // Custom sensitivity break points
-  coinSlots[0][1] = 235;
+  coinSlots[0][1] = 220;
   coinSlots[1][1] = 80;
   coinSlots[2][1] = 130;
-  coinSlots[3][1] = 25;
+  coinSlots[3][1] = 19;
   coinSlots[4][1] = 100;
   
   tft.begin();
@@ -98,6 +80,9 @@ void setup() {
   servoPos = 0;
   servo.write(servoPos);              // tell servo to go to position in variable 'pos
   delay(500);
+  servoPos = 90;
+  servo.write(servoPos);              // tell servo to go to position in variable 'pos'
+  delay(500);
 }
 
 void loop() {
@@ -107,62 +92,44 @@ void loop() {
   checkGoal();
 }
 
-void sendAudio() {
-  String tx = "A";
-  tx.concat(audio);
-  Serial.println(tx);
-}
-
-// Checks if the goal has been reached
 void checkGoal() {
-  // Unlock drawer if you reach your goal
   if(totalMoney >= sGoal) {
     servoPos = 0;
-    if(goalReached == false && sGoal != 0) {  // Only triggers if goal has changed
-      Serial.println("A4");
+    if(goalReached == false && sGoal != 0) {
       showCongratulations(true);
       goalReached = true; 
     }
   }
-  // Lock drawer if the goal has been set
-  else if(sGoal != 0) { 
+  else if(sGoal != 0) {
     servoPos = 90;
-    if(goalReached == true)  // Only triggers if goal has changed
+    if(goalReached == true)
       showCongratulations(false);
     goalReached = false;
   }
-  
-  if(prevServoPos != servoPos) {  // Only triggers if servo has changed
-    servo.write(servoPos);
-    delay(500);
-  }
-  prevServoPos = servoPos;
+  servo.write(servoPos);
+  delay(100);
 }
 
 void checkBills() {
   if(Serial.available()) {
-    String rx = Serial.readStringUntil('\n'); // Read the serial data and store in var
+    String rx = Serial.readStringUntil('\n'); //Read the serial data and store in var
     int value = rx.toInt();
     Serial.println(rx);
     switch(value) {
       case 1:
         totalMoney += 5;
-        Serial.println("A2");
         regularDisplay();
         break;
       case 2:
         totalMoney += 10;
-        Serial.println("A2");
         regularDisplay();
         break;
       case 3:
         totalMoney += 20;
-        Serial.println("A2");
         regularDisplay();
         break;
       case 4:
         totalMoney += 50;
-        Serial.println("A2");
         regularDisplay();
         break;
     }
@@ -173,16 +140,14 @@ void checkButtons() {
   btnPressed = -1;
   for (int i = 0; i < numBtns; i++) {  // Read values and assign accordingly
     btnValues[i][0] = digitalRead(btnPins[i]);
-    if (btnValues[i][0] == 0 && btnValues[i][1] == 1) {// Ensure action executes on button release
+    if (btnValues[i][0] == 0 && btnValues[i][1] == 1) // Ensure action executes on button release
       btnPressed = i;
-      Serial.println("A3");
-    }
     btnValues[i][1] = btnValues[i][0];  // Save values for next cycle
   }
 
   switch(btnPressed) {
     case 0:
-      Serial.println("+$5");
+      Serial.println("Adding $5");
       sGoal += 5;
       regularDisplay();
       break;
@@ -206,11 +171,11 @@ void checkCoinSlots() {
   for(int i = 0; i < numCoins; i++) {  // Check sensor values
     coinSlots[i][0] = analogRead(sensPins[i]);
     
-    // if(i == 3) {
-    //   Serial.print(i);
-    //   Serial.print(": ");
-    //   Serial.println(coinSlots[i][0]);
-    // }
+    /*if(i == 3) {
+      Serial.print(i);
+      Serial.print(": ");
+      Serial.println(coinSlots[i][0]);
+    }*/
     
     if(coinSlots[i][2] + interval <= millis() && coinSlots[i][0] > coinSlots[i][1])
       coinSlots[i][4] = 1.0;
@@ -219,7 +184,6 @@ void checkCoinSlots() {
       Serial.print("Coin accepted: $");
       Serial.println(coinSlots[i][3]);
       totalMoney += coinSlots[i][3];
-      Serial.println("A1");
       regularDisplay();
       coinSlots[i][2] = millis();
       coinSlots[i][4] = 0;
